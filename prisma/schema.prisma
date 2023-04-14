@@ -1,0 +1,75 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  role_id        String         @map("role_id") @db.ObjectId
+  name           String
+  email          String         @unique
+  phone_number   String         @unique
+  password       String
+  avatar         String?
+  status         UserStatus     @default(active)
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+  role           Role           @relation(fields: [role_id], references: [id])
+  database_users DatabaseUser[]
+  stores         Store[]
+}
+
+enum UserStatus {
+  active
+  inactive
+  banned
+  hold
+}
+
+model Role {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String   @unique
+  description String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  users       User[]
+}
+
+model Otp {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  email      String   @unique
+  otp        String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model DatabaseUser {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  user_id      String   @map("user_id") @db.ObjectId
+  database_url String
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  user         User     @relation(fields: [user_id], references: [id])
+}
+
+model Store {
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  user_id            String    @map("user_id") @db.ObjectId
+  shop_id            Int       @unique
+  shop_type          String
+  name               String
+  domain             String    @unique
+  region             String
+  status             Boolean   @default(false)
+  authorization_time DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  user               User      @relation(fields: [user_id], references: [id])
+}
