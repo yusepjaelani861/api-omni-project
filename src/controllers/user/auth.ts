@@ -18,19 +18,35 @@ class Authentication extends Controllers {
             return next(new sendError('Please provide an email and password', [], 'PROCESS_ERROR'));
         }
 
-        const user = await this.user.findUser({ email });
+        // cek is email or phone
+        if (!email.includes('@')) {
+            const user = await this.user.findUser({ phone_number: email });
+            if (!user) {
+                return next(new sendError('Invalid credentials', [], 'UNAUTHORIZED'));
+            }
 
-        if (!user) {
-            return next(new sendError('Invalid credentials', [], 'UNAUTHORIZED'));
+            const isMatch = await bcryptjs.compare(password, user.password);
+
+            if (!isMatch) {
+                return next(new sendError('Invalid credentials', [], 'UNAUTHORIZED'));
+            }
+
+            return this.user.sendTokenResponse(user, res);
+        } else {
+            const user = await this.user.findUser({ email });
+
+            if (!user) {
+                return next(new sendError('Invalid credentials', [], 'UNAUTHORIZED'));
+            }
+
+            const isMatch = await bcryptjs.compare(password, user.password);
+
+            if (!isMatch) {
+                return next(new sendError('Invalid credentials', [], 'UNAUTHORIZED'));
+            }
+
+            return this.user.sendTokenResponse(user, res);
         }
-
-        const isMatch = await bcryptjs.compare(password, user.password);
-
-        if (!isMatch) {
-            return next(new sendError('Invalid credentials', [], 'UNAUTHORIZED'));
-        }
-
-        return this.user.sendTokenResponse(user, res);
     })
 
     public register = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
@@ -39,21 +55,37 @@ class Authentication extends Controllers {
             return next(new sendError('Please provide an email and password', errors.array(), 'VALIDATION_ERROR'));
         }
 
-        const { email, password, name, phone_number } = req.body;
+        const { email, password, name, phone_number, type } = req.body;
 
-        if (!email || !password || !name || !phone_number) {
-            return next(new sendError('Please provide an email, password, name and phone number', [], 'PROCESS_ERROR'));
+        if (type === 'email') {
+            if (!email || !password || !name || !phone_number) {
+                return next(new sendError('Please provide an email, password, name and phone number', [], 'PROCESS_ERROR'));
+            }
         }
 
-        const user = await this.user.findUser({ email });
+        if (type === 'phone') {
+            if (!phone_number || !password) {
+                return next(new sendError('Please provide a phone number', [], 'PROCESS_ERROR'));
+            }
+        }
+
+        let user;
+        if (type === 'email') {
+            user = await this.user.findUser({ email });
+        }
+
+        if (type === 'phone') {
+            user = await this.user.findUser({ phone_number });
+        }
+
 
         if (user) {
             return next(new sendError('User already exists', [], 'PROCESS_ERROR'));
         }
 
-        const cekRole = await this.role.findRole({ name: 'Free' });
+        let cekRole = await this.role.findRole({ name: 'Free' });
         if (!cekRole) {
-            await this.role.createRole({ name: 'Free' });
+            cekRole = await this.role.createRole({ name: 'Free' });
         }
 
         const role = await this.role.findRole({ name: 'Free' });
@@ -90,14 +122,20 @@ class Authentication extends Controllers {
         switch (method) {
             case 'login': {
                 return [
-                    body('email', 'Please provide a valid email').isEmail(),
+                    body('email', 'Please provide a valid email').notEmpty(),
                     body('password', 'Please provide a password').exists()
                 ]
             }
 
             case 'register': {
                 return [
-                    body('email', 'Please provide a valid email').isEmail(),
+                    body('email', 'Please provide a valid email').optional().custom((value, { req }) => {
+                        return this.user.findUser({ email: value }).then(user => {
+                            if (user) {
+                                return Promise.reject('E-mail already in use');
+                            }
+                        });
+                    }),
                     body('password', 'Please provide a password').exists()
                         .isLength({ min: 6 })
                         .withMessage('Password must be at least 6 characters long'),
@@ -105,7 +143,7 @@ class Authentication extends Controllers {
                         .custom((value, { req }) => value === req.body.password)
                         .withMessage('Password confirmation does not match password'),
                     body('name', 'Please provide a name').exists(),
-                    body('phone_number', 'Please provide a phone number').exists()
+                    body('phone_number', 'Please provide a phone number').optional()
                 ]
             }
 

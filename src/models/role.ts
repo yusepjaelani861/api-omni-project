@@ -21,7 +21,9 @@ export class RoleModel {
 
     public createRole = async (data: Prisma.RoleCreateInput): Promise<RoleProps> => {
         const role = await prisma.role.create({
-            data,
+            data: {
+                name: data.name,
+            },
             select: {
                 id: true,
                 name: true,
